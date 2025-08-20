@@ -9,6 +9,10 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Jetstream\HasProfilePhoto;
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\Perfil;
+use App\Models\Role;
+use App\Models\Sala;
+use App\Models\Mensagem;
 
 class User extends Authenticatable
 {
@@ -63,5 +67,41 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+    public function perfil()
+    {
+        //Análise: Estamos a dizer: "Um User tem um (hasOne) Perfil. A ligação entre nós é feita através da coluna utilizador_id na tabela perfis."
+        return $this->hasOne(Perfil::class, 'utilizador_id');
+    }
+
+    public function roles()
+    {  //Um User pertence a muitos (belongsToMany) Roles. A nossa ligação é feita através da tabela pivot role_user
+        return $this->belongsToMany(Role::class, 'role_user');
+    }
+
+    /**
+     * As salas que o utilizador criou.
+     */
+    public function salasCriadas()
+    {
+        return $this->hasMany(Sala::class, 'criado_por_utilizador_id');
+    }
+
+    /**
+     * As salas a que o utilizador pertence.
+     */
+    public function salas()
+    {
+        return $this->belongsToMany(Sala::class, 'sala_utilizadores')
+            ->withPivot('role_na_sala')
+            ->withTimestamps();
+    }
+
+    /**
+     * As mensagens que o utilizador enviou.
+     */
+    public function mensagensEnviadas()
+    {
+        return $this->hasMany(Mensagem::class, 'remetente_id');
     }
 }
