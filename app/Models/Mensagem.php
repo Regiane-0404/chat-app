@@ -10,6 +10,8 @@ class Mensagem extends Model
 {
     use HasFactory, SoftDeletes; // Usar o SoftDeletes
 
+    protected $table = 'mensagens';
+
     /**
      * The attributes that are mass assignable.
      *
