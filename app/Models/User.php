@@ -97,4 +97,13 @@ class User extends Authenticatable
     {
         return $this->hasMany(Mensagem::class, 'remetente_id');
     }
+    /**
+     * Gera as iniciais do nome do utilizador.
+     */
+    public function initials(): string
+    {
+        return collect(explode(' ', $this->name))
+            ->map(fn(string $segment) => mb_substr($segment, 0, 1))
+            ->join('');
+    }
 }

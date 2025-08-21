@@ -5,13 +5,34 @@ namespace App\Livewire\Chat;
 use Livewire\Component;
 use Illuminate\View\View;
 use App\Models\Sala;
+use App\Models\Mensagem;
+use App\Events\MensagemEnviada;
 
 class ChatIndex extends Component
 {
+    public bool $mostrandoModalNovaSala = false;
+    public string $nomeNovaSala = '';
     public $salas;
-    public $salaSelecionada = null;
-    public $mensagens; // Propriedade para as mensagens
-    public string $novaMensagem = ''; // Nova propriedade para o input
+    public ?Sala $salaSelecionada = null;
+    public $mensagens = [];
+    public string $novaMensagem = '';
+
+    /**
+     * Define os "ouvintes" de eventos dinamicamente.
+     * Esta é a peça chave para o tempo real.
+     */
+    public function getListeners()
+    {
+        // Se nenhuma sala estiver selecionada, não ouve nada.
+        if (!$this->salaSelecionada) {
+            return [];
+        }
+
+        // Se uma sala estiver selecionada, ouve o canal privado específico dela.
+        return [
+            "echo-private:sala.{$this->salaSelecionada->id},.App\\Events\\MensagemEnviada" => 'receberMensagem',
+        ];
+    }
 
     public function mount(): void
     {
@@ -19,38 +40,83 @@ class ChatIndex extends Component
         $this->salas = $user->salas()->get();
     }
 
+    /**
+     * Este método é chamado quando uma nova mensagem é recebida pelo broadcast.
+     */
+    public function receberMensagem(array $data): void
+    {
+        // Encontra a mensagem completa na base de dados a partir dos dados recebidos
+        $novaMsg = Mensagem::find($data['mensagem']['id']);
+
+        // Adiciona a nova mensagem à lista, APENAS se não for do próprio utilizador
+        // (para evitar duplicados, já que adicionamos a nossa própria mensagem instantaneamente)
+        if (auth()->id() != $novaMsg->remetente_id) {
+            $this->mensagens->push($novaMsg);
+            $this->dispatch('mensagemAdicionada'); // Dispara o evento para o scroll do JS
+        }
+    }
+
     public function selecionarSala(int $salaId): void
     {
         $this->salaSelecionada = Sala::findOrFail($salaId);
-        // Ao selecionar a sala, carregamos as suas mensagens usando o relacionamento
         $this->mensagens = $this->salaSelecionada->mensagens()->get();
+        // Dispara o evento de scroll para o JS ir para o fundo ao selecionar a sala
+        $this->dispatch('mensagemAdicionada');
     }
 
-    /**
-     * Guarda a nova mensagem na base de dados.
-     */
     public function enviarMensagem(): void
     {
-        // 1. Validar que a sala está selecionada e a mensagem não está vazia
         if (!$this->salaSelecionada || empty(trim($this->novaMensagem))) {
             return;
         }
 
-        // 2. Criar a mensagem na base de dados
-        $this->salaSelecionada->mensagens()->create([
+        $mensagem = $this->salaSelecionada->mensagens()->create([
             'remetente_id' => auth()->id(),
             'conteudo' => $this->novaMensagem,
         ]);
 
-        // 3. Limpar a caixa de texto
         $this->reset('novaMensagem');
 
-        // 4. Recarregar as mensagens para mostrar a nova
-        $this->mensagens = $this->salaSelecionada->mensagens()->get();
+        // Adiciona a nossa própria mensagem à lista para um feedback instantâneo
+        $this->mensagens->push($mensagem);
+
+        // Transmite o evento para os outros utilizadores
+        broadcast(new MensagemEnviada($mensagem))->toOthers();
+
+        // Dispara o evento de scroll para a nossa própria mensagem
+        $this->dispatch('mensagemAdicionada');
+    }
+
+    public function mostrarModalNovaSala(): void
+    {
+        $this->reset('nomeNovaSala');
+        $this->mostrandoModalNovaSala = true;
+    }
+
+    public function fecharModalNovaSala(): void
+    {
+        $this->mostrandoModalNovaSala = false;
+    }
+
+    public function criarNovaSala(): void
+    {
+        $validated = $this->validate([
+            'nomeNovaSala' => 'required|string|min:3|max:50',
+        ]);
+
+        $sala = Sala::create([
+            'nome' => $validated['nomeNovaSala'],
+            'criado_por_utilizador_id' => auth()->id(),
+        ]);
+
+        $sala->utilizadores()->attach(auth()->id());
+        $this->salas = auth()->user()->salas()->get();
+        $this->fecharModalNovaSala();
+        $this->dispatch('notify', message: 'Sala criada com sucesso!');
     }
 
     public function render(): View
     {
-        return view('livewire.chat.chat-index')->layout('layouts.app');
+        return view('livewire.chat.chat-index');
     }
 }

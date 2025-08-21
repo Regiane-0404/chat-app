@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Sala extends Model
 {
@@ -21,6 +21,10 @@ class Sala extends Model
         'tipo',
         'criado_por_utilizador_id',
     ];
+
+    /**
+     * Obtém o utilizador que criou a sala.
+     */
     public function criador()
     {
         return $this->belongsTo(User::class, 'criado_por_utilizador_id');
@@ -32,8 +36,7 @@ class Sala extends Model
     public function utilizadores()
     {
         return $this->belongsToMany(User::class, 'sala_utilizadores')
-            ->withPivot('role_na_sala') // Importante para podermos aceder à permissão na sala
-            ->withTimestamps(); // Se a tabela pivot tiver timestamps
+            ->withPivot('role_na_sala');
     }
 
     /**
@@ -44,9 +47,3 @@ class Sala extends Model
         return $this->hasMany(Mensagem::class, 'sala_id');
     }
 }
-
-
-//Análise:
-//criador(): Uma sala pertence a um (belongsTo) utilizador criador.
-//utilizadores(): Uma sala pertence a muitos (belongsToMany) utilizadores. A linha withPivot('role_na_sala') é super importante, pois permite-nos saber a permissão de cada utilizador na sala.
-//mensagens(): Uma sala tem muitas (hasMany) mensagens.
