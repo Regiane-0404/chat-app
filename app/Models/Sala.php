@@ -22,9 +22,21 @@ class Sala extends Model
         'criado_por_utilizador_id',
     ];
 
+
+    protected $appends = ['avatar_url'];
+
     /**
-     * Obtém o utilizador que criou a sala.
+     * Gera a URL para o avatar da sala.
      */
+    public function getAvatarUrlAttribute(): string
+    {
+        if ($this->avatar_path) {
+            return Storage::disk('public')->url($this->avatar_path);
+        }
+
+        // Gera um avatar padrão com a primeira letra do nome
+        return 'https://ui-avatars.com/api/?name=' . urlencode(substr($this->nome, 0, 1)) . '&color=7F9CF5&background=EBF4FF';
+    }
     public function criador()
     {
         return $this->belongsTo(User::class, 'criado_por_utilizador_id');

@@ -6,13 +6,17 @@ use Livewire\Component;
 use Illuminate\View\View;
 use App\Models\Sala;
 use App\Models\User;
+use Livewire\WithFileUploads; // CORREÇÃO 1: Importar o trait com o namespace completo
 
 class GerirMembros extends Component
 {
+    use WithFileUploads; // CORREÇÃO 2: Usar o trait aqui dentro da classe
+
     public Sala $sala;
     public string $termoPesquisa = '';
     public $resultadosPesquisa = [];
     public ?User $membroParaRemover = null;
+    public $novoAvatar;
 
     public function mount(Sala $sala): void
     {
@@ -29,7 +33,10 @@ class GerirMembros extends Component
 
     public function pesquisarUtilizadores(): void
     {
-        if (strlen($this->termoPesquisa) < 2) { $this->resultadosPesquisa = []; return; }
+        if (strlen($this->termoPesquisa) < 2) {
+            $this->resultadosPesquisa = [];
+            return;
+        }
         $membrosAtuaisIds = $this->sala->utilizadores->pluck('id');
         $this->resultadosPesquisa = User::where('name', 'like', '%' . $this->termoPesquisa . '%')
             ->whereNotIn('id', $membrosAtuaisIds)->take(5)->get();
@@ -40,7 +47,7 @@ class GerirMembros extends Component
         $this->sala->utilizadores()->attach($userId);
         $this->sala->load('utilizadores');
         $this->dispatch('notify', message: 'Membro adicionado com sucesso!');
-        $this->dispatch('membrosAtualizados'); // Dispara o evento global
+        $this->dispatch('membrosAtualizados');
         $this->reset('termoPesquisa', 'resultadosPesquisa');
     }
 
@@ -68,7 +75,21 @@ class GerirMembros extends Component
         $this->sala->utilizadores()->detach($userId);
         $this->sala->load('utilizadores');
         $this->dispatch('notify', message: 'Membro removido com sucesso!');
-        $this->dispatch('membrosAtualizados'); // Dispara o evento global
+        $this->dispatch('membrosAtualizados');
         $this->cancelarRemocao();
+    }
+
+    public function salvarAvatar(): void
+    {
+        $this->validate([
+            'novoAvatar' => 'required|image|max:2048',
+        ]);
+
+        $path = $this->novoAvatar->store('sala-avatars', 'public');
+
+        $this->sala->update(['avatar_path' => $path]);
+
+        $this->reset('novoAvatar');
+        $this->dispatch('notify', message: 'Avatar da sala atualizado!');
     }
 }

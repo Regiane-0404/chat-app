@@ -12,8 +12,69 @@
     </div>
 
     <div class="bg-white p-6 rounded-lg shadow-md">
+        <!-- Secção de Avatar -->
+        <div>
+            <h4 class="text-sm font-bold text-gray-600 uppercase">Avatar da Sala</h4>
+            <div class="mt-2 flex items-center space-x-4">
+
+                <!-- Avatar Atual -->
+                <img src="{{ $sala->avatar_url }}" alt="Avatar da Sala"
+                    class="h-16 w-16 rounded-full object-cover flex-shrink-0">
+
+                <!-- Formulário de Upload -->
+                <form wire:submit.prevent="salvarAvatar" class="flex-1">
+                    <div class="flex flex-col space-y-2">
+
+                        <!-- Linha 1: Upload + Salvar -->
+                        <div class="flex items-center space-x-2">
+                            <!-- Input oculto -->
+                            <input type="file" wire:model="novoAvatar" id="novoAvatar-{{ $sala->id }}"
+                                class="hidden" accept="image/*">
+
+                            <!-- Botão Selecionar -->
+                            <label for="novoAvatar-{{ $sala->id }}"
+                                class="px-3 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 cursor-pointer transition text-sm font-medium flex items-center space-x-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                </svg>
+                                <span>Selecionar</span>
+                            </label>
+
+                            <!-- Botão Salvar -->
+                            <button type="submit"
+                                class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                                wire:loading.attr="disabled">
+                                <span wire:loading.remove wire:target="novoAvatar">Salvar</span>
+                                <span wire:loading wire:target="novoAvatar">A guardar...</span>
+                            </button>
+                        </div>
+
+                        <!-- Nome do ficheiro -->
+                        @if ($novoAvatar)
+                            <div class="text-xs text-gray-600 mt-1">
+                                ✅ {{ $novoAvatar->getClientOriginalName() }}
+                                ({{ number_format($novoAvatar->getSize() / 1024, 2) }} KB)
+                            </div>
+                        @endif
+
+                        <!-- Feedback de carregamento -->
+                        <div wire:loading wire:target="novoAvatar" class="text-xs text-blue-500 mt-1">
+                            A carregar...
+                        </div>
+
+                        <!-- Erro de validação -->
+                        @error('novoAvatar')
+                            <span class="text-red-500 text-xs mt-1">{{ $message }}</span>
+                        @enderror
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Lista de Membros Atuais -->
-        <div class="mt-4">
+        <div class="mt-6 border-t pt-6">
             <h4 class="text-sm font-bold text-gray-600 uppercase">Membros Atuais ({{ $sala->utilizadores->count() }})
             </h4>
             <div class="mt-2 space-y-2 max-h-60 overflow-y-auto">

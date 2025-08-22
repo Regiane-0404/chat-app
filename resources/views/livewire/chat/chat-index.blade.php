@@ -1,5 +1,5 @@
 <!-- Container Principal: controla tudo -->
-<div class="h短暂-screen overflow-hidden flex flex-col font-sans antialiased text-gray-800">
+<div class="h-screen overflow-hidden flex flex-col font-sans antialiased text-gray-800">
 
     <!-- Barra de Navegação Superior Fixa -->
     <header class="flex-shrink-0 z-20 bg-white border-b">
@@ -65,15 +65,22 @@
             <div class="flex flex-col space-y-1 mt-4 -mx-2 px-1 overflow-y-auto">
                 @forelse ($salas as $sala)
                     <div class="flex items-center justify-between hover:bg-gray-100 rounded-xl p-2 group">
-                        <button wire:key="sala-{{ $sala->id }}" wire:click="selecionarSala({{ $sala->id }})"
-                            class="flex-1 flex items-center text-left">
-                            <div
-                                class="flex items-center justify-center h-8 w-8 bg-blue-100 rounded-full text-blue-600 font-bold">
-                                {{ strtoupper(substr($sala->nome, 0, 1)) }}
-                            </div>
-                            <div class="ml-2 text-sm font-medium text-gray-800">{{ $sala->nome }}</div>
-                        </button>
-
+                        <div class="flex items-center justify-between w-full">
+                            <button wire:key="sala-{{ $sala->id }}" wire:click="selecionarSala({{ $sala->id }})"
+                                class="flex-1 flex items-center text-left">
+                                <img src="{{ $sala->avatar_url }}" alt="{{ $sala->nome }}"
+                                    class="h-8 w-8 rounded-full object-cover">
+                                <div class="ml-2 text-sm font-medium text-gray-800">{{ $sala->nome }}</div>
+                            </button>
+                            @php($naoLidas = $this->salasComNaoLidas[$sala->id] ?? 0)
+                            @if ($naoLidas > 0)
+                                <span
+                                    class="ml-2 inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1.5 
+                                             text-xs font-semibold rounded-full bg-red-500 text-white">
+                                    {{ $naoLidas > 99 ? '99+' : $naoLidas }}
+                                </span>
+                            @endif
+                        </div>
                         @if (auth()->user()->isAdmin())
                             <button wire:click="apagarSala({{ $sala->id }})"
                                 wire:confirm="Tem a certeza que quer apagar esta sala e todas as suas mensagens?"
@@ -101,7 +108,7 @@
                     @forelse ($utilizadores as $utilizador)
                         <button wire:click="iniciarConversa({{ $utilizador->id }})"
                             class="flex flex-row items-center hover:bg-gray-100 rounded-xl p-2 transition
-    {{ $destinatario && $destinatario->id == $utilizador->id ? 'bg-blue-50 border-l-4 border-blue-400' : '' }}">
+                            {{ $destinatario && $destinatario->id == $utilizador->id ? 'bg-blue-50 border-l-4 border-blue-400' : '' }}">
                             <img src="{{ $utilizador->profile_photo_url }}" alt="{{ $utilizador->name }}"
                                 class="h-8 w-8 rounded-full object-cover">
                             <div class="ml-2 text-sm font-medium text-gray-800">{{ $utilizador->name }}</div>
