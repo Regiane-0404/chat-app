@@ -11,3 +11,7 @@ Broadcast::channel('sala.{salaId}', function ($user, $salaId) {
     // Verifica se o utilizador é um membro da sala
     return $sala && $sala->utilizadores->contains($user);
 });
+Broadcast::channel('utilizador.{id}', function ($user, $id) {
+    // Apenas o próprio utilizador pode ouvir o seu canal.
+    return (int) $user->id === (int) $id;
+});

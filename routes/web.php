@@ -1,35 +1,31 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Livewire\Volt\Volt;
 use App\Livewire\Chat\ChatIndex;
+use App\Livewire\Chat\GerirMembros;
 
+// Rota Raiz: Redireciona para o chat
 Route::get('/', function () {
-    return view('welcome');
-})->name('home');
-
-Route::view('dashboard', 'dashboard')
-    ->middleware(['auth', 'verified'])
-    ->name('dashboard');
-
-Route::middleware(['auth'])->group(function () {
-    Route::redirect('settings', 'settings/profile');
-
-    Volt::route('settings/profile', 'settings.profile')->name('settings.profile');
-    Volt::route('settings/password', 'settings.password')->name('settings.password');
-    Volt::route('settings/appearance', 'settings.appearance')->name('settings.appearance');
+    return redirect()->route('chat.index');
 });
 
-require __DIR__ . '/auth.php';
-
+// Grupo de rotas que exigem autenticação
 Route::middleware([
     'auth:sanctum',
     config('jetstream.auth_session'),
     'verified',
 ])->group(function () {
+    // Rota de "casa" (para onde o sistema redireciona internamente)
+    // Aponta para a nossa rota do chat
+    Route::get('/home', function () {
+        return redirect()->route('chat.index');
+    });
+
     Route::get('/dashboard', function () {
         return view('dashboard');
     })->name('dashboard');
-});
 
-Route::get('/chat', ChatIndex::class)->name('chat.index');
+    Route::get('/chat', ChatIndex::class)->name('chat.index');
+
+    Route::get('/salas/{sala}/membros', GerirMembros::class)->name('salas.membros');
+});

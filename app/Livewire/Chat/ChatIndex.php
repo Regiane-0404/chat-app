@@ -6,85 +6,141 @@ use Livewire\Component;
 use Illuminate\View\View;
 use App\Models\Sala;
 use App\Models\Mensagem;
+use App\Models\User;
 use App\Events\MensagemEnviada;
+use App\Events\MensagemDiretaEnviada;
+use Livewire\Attributes\On;
 
 class ChatIndex extends Component
 {
     public bool $mostrandoModalNovaSala = false;
     public string $nomeNovaSala = '';
     public $salas;
+    public $utilizadores;
     public ?Sala $salaSelecionada = null;
+    public ?User $destinatario = null;
     public $mensagens = [];
     public string $novaMensagem = '';
 
-    /**
-     * Define os "ouvintes" de eventos dinamicamente.
-     * Esta é a peça chave para o tempo real.
-     */
+    #[On('membrosAtualizados')]
+    public function carregarDadosIniciais(): void
+    {
+        $user = auth()->user()->fresh(); // <-- Adicione o ->fresh()
+        if ($user) {
+            $this->salas = $user->salas()->get();
+            $this->utilizadores = User::where('id', '!=', $user->id)->get();
+        }
+    }
+
     public function getListeners()
     {
-        // Se nenhuma sala estiver selecionada, não ouve nada.
-        if (!$this->salaSelecionada) {
-            return [];
+        $userId = auth()->id();
+        if (!$userId) return [];
+
+        $listeners = [
+            "echo-private:utilizador.{$userId},.App\\Events\\MensagemDiretaEnviada" => 'receberMensagemDireta',
+        ];
+
+        if ($this->salaSelecionada) {
+            $listeners["echo-private:sala.{$this->salaSelecionada->id},.App\\Events\\MensagemEnviada"] = 'receberMensagem';
         }
 
-        // Se uma sala estiver selecionada, ouve o canal privado específico dela.
-        return [
-            "echo-private:sala.{$this->salaSelecionada->id},.App\\Events\\MensagemEnviada" => 'receberMensagem',
-        ];
+        // Adiciona o ouvinte do #[On] ao array
+        $listeners = array_merge($listeners, $this->getOnListeners());
+
+        return $listeners;
+    }
+
+    // Este método é um helper para o getListeners(), não precisa de mexer aqui.
+    protected function getOnListeners()
+    {
+        $listeners = [];
+        $reflection = new \ReflectionClass($this);
+        foreach ($reflection->getMethods() as $method) {
+            foreach ($method->getAttributes(On::class) as $attribute) {
+                $listeners[$attribute->getArguments()[0]] = $method->getName();
+            }
+        }
+        return $listeners;
     }
 
     public function mount(): void
     {
-        $user = auth()->user();
-        $this->salas = $user->salas()->get();
+        if (!auth()->check()) {
+            redirect()->route('login');
+            return;
+        }
+        $this->carregarDadosIniciais();
     }
 
-    /**
-     * Este método é chamado quando uma nova mensagem é recebida pelo broadcast.
-     */
+    public function render(): View
+    {
+        return view('livewire.chat.chat-index');
+    }
+
     public function receberMensagem(array $data): void
     {
-        // Encontra a mensagem completa na base de dados a partir dos dados recebidos
         $novaMsg = Mensagem::find($data['mensagem']['id']);
+        if ($this->salaSelecionada && $this->salaSelecionada->id == $novaMsg->sala_id) {
+            if (auth()->id() != $novaMsg->remetente_id) {
+                $this->mensagens->push($novaMsg);
+                $this->dispatch('mensagemAdicionada');
+            }
+        }
+    }
 
-        // Adiciona a nova mensagem à lista, APENAS se não for do próprio utilizador
-        // (para evitar duplicados, já que adicionamos a nossa própria mensagem instantaneamente)
-        if (auth()->id() != $novaMsg->remetente_id) {
+    public function receberMensagemDireta(array $data): void
+    {
+        $novaMsg = Mensagem::find($data['mensagem']['id']);
+        if ($this->destinatario && $this->destinatario->id == $novaMsg->remetente_id) {
             $this->mensagens->push($novaMsg);
-            $this->dispatch('mensagemAdicionada'); // Dispara o evento para o scroll do JS
+            $this->dispatch('mensagemAdicionada');
         }
     }
 
     public function selecionarSala(int $salaId): void
     {
+        // Esta linha estava em falta:
         $this->salaSelecionada = Sala::findOrFail($salaId);
+
+        $this->destinatario = null;
         $this->mensagens = $this->salaSelecionada->mensagens()->get();
-        // Dispara o evento de scroll para o JS ir para o fundo ao selecionar a sala
+
+        // Marcar a sala como lida
+        auth()->user()->salas()->updateExistingPivot($salaId, [
+            'last_read_at' => now()
+        ]);
+
+        $this->dispatch('mensagemAdicionada'); // Para o scroll
+    }
+
+    public function iniciarConversa(int $userId): void
+    {
+        $this->destinatario = User::findOrFail($userId);
+        $this->salaSelecionada = null;
+        $this->mensagens = Mensagem::where(fn($q) => $q->where('remetente_id', auth()->id())->where('destinatario_id', $userId))
+            ->orWhere(fn($q) => $q->where('remetente_id', $userId)->where('destinatario_id', auth()->id()))
+            ->orderBy('created_at')->get();
         $this->dispatch('mensagemAdicionada');
     }
 
     public function enviarMensagem(): void
     {
-        if (!$this->salaSelecionada || empty(trim($this->novaMensagem))) {
-            return;
+        if (empty(trim($this->novaMensagem))) return;
+        $mensagem = null;
+        if ($this->salaSelecionada) {
+            $mensagem = $this->salaSelecionada->mensagens()->create(['remetente_id' => auth()->id(), 'conteudo' => $this->novaMensagem]);
+            broadcast(new MensagemEnviada($mensagem))->toOthers();
+        } elseif ($this->destinatario) {
+            $mensagem = Mensagem::create(['remetente_id' => auth()->id(), 'destinatario_id' => $this->destinatario->id, 'conteudo' => $this->novaMensagem]);
+            broadcast(new MensagemDiretaEnviada($mensagem))->toOthers();
         }
 
-        $mensagem = $this->salaSelecionada->mensagens()->create([
-            'remetente_id' => auth()->id(),
-            'conteudo' => $this->novaMensagem,
-        ]);
-
-        $this->reset('novaMensagem');
-
-        // Adiciona a nossa própria mensagem à lista para um feedback instantâneo
-        $this->mensagens->push($mensagem);
-
-        // Transmite o evento para os outros utilizadores
-        broadcast(new MensagemEnviada($mensagem))->toOthers();
-
-        // Dispara o evento de scroll para a nossa própria mensagem
-        $this->dispatch('mensagemAdicionada');
+        if ($mensagem) {
+            $this->reset('novaMensagem');
+            $this->mensagens->push($mensagem);
+            $this->dispatch('mensagemAdicionada');
+        }
     }
 
     public function mostrarModalNovaSala(): void
@@ -100,23 +156,47 @@ class ChatIndex extends Component
 
     public function criarNovaSala(): void
     {
-        $validated = $this->validate([
-            'nomeNovaSala' => 'required|string|min:3|max:50',
-        ]);
-
-        $sala = Sala::create([
-            'nome' => $validated['nomeNovaSala'],
-            'criado_por_utilizador_id' => auth()->id(),
-        ]);
-
+        $validated = $this->validate(['nomeNovaSala' => 'required|string|min:3|max:50']);
+        $sala = Sala::create(['nome' => $validated['nomeNovaSala'], 'criado_por_utilizador_id' => auth()->id()]);
         $sala->utilizadores()->attach(auth()->id());
-        $this->salas = auth()->user()->salas()->get();
+        $this->carregarDadosIniciais();
         $this->fecharModalNovaSala();
         $this->dispatch('notify', message: 'Sala criada com sucesso!');
     }
 
-    public function render(): View
+    public function apagarSala(int $salaId): void
     {
-        return view('livewire.chat.chat-index');
+        if (!auth()->user()->isAdmin()) {
+            abort(403);
+        }
+
+        $sala = Sala::findOrFail($salaId);
+        $sala->delete();
+
+        if ($this->salaSelecionada && $this->salaSelecionada->id === $salaId) {
+            $this->salaSelecionada = null;
+            $this->mensagens = [];
+        }
+        $this->carregarDadosIniciais();
+        $this->dispatch('notify', message: 'Sala apagada com sucesso!');
+    }
+
+    /**
+     * Propriedade computada para contar mensagens não lidas.
+     */
+    public function getSalasComNaoLidasProperty()
+    {
+        $salasComContagem = [];
+        foreach ($this->salas as $sala) {
+            $lastRead = $sala->pivot->last_read_at ?? now()->subYears(10);
+
+            $count = Mensagem::where('sala_id', $sala->id)
+                ->where('created_at', '>', $lastRead)
+                ->where('remetente_id', '!=', auth()->id()) // Não contar as nossas próprias
+                ->count();
+
+            $salasComContagem[$sala->id] = $count;
+        }
+        return $salasComContagem;
     }
 }

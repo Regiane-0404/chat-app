@@ -14,35 +14,28 @@
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
 
-        <!-- Alpine.js (necessário para x-data, x-init, etc) -->
-        <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-
         <!-- Styles -->
         @livewireStyles
     </head>
-    <body class="font-sans antialiased">
+    <body class="h-screen overflow-hidden font-sans antialiased">
         <x-banner />
 
-        <div class="min-h-screen bg-gray-100">
-            @livewire('navigation-menu')
+        <div class="flex h-full flex-col">
+            <!-- Cabeçalho Fixo -->
+            <header class="flex-shrink-0">
+                @livewire('navigation-menu')
+            </header>
 
-            <!-- Page Heading -->
-            @if (isset($header))
-                <header class="bg-white shadow">
-                    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-                        {{ $header }}
-                    </div>
-                </header>
-            @endif
-
-            <!-- Page Content -->
-            <main>
-                {{ $slot }}
-            </main>
+            <!-- Conteúdo Principal -->
+            <div class="flex-1 flex flex-row overflow-hidden">
+                <!-- Conteúdo que será preenchido pelo nosso componente Livewire -->
+                <main class="flex-1 overflow-y-auto">
+                    {{ $slot }}
+                </main>
+            </div>
         </div>
 
         @stack('modals')
-
         @livewireScripts
     </body>
 </html>
